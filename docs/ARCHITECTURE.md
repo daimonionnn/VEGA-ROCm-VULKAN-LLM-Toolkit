@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Technical background on GPU inference for this system and why Vulkan is the production backend.
+Technical background on GPU inference for this system.
 
 ## System Hardware
 

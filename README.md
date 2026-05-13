@@ -1,6 +1,6 @@
-# LLM Inference Toolkit for Linux — Vulkan/ROCm/CUDA management for AMD APU + dGPU (ROCm for AMD APUs or older AMD GPUs)
+# VEGA-ROCm-VULKAN-LLM-Toolkit for Linux 
 
-Personal toolkit for running local LLMs on a dual-GPU system using llama.cpp (Llama Server) and LM Studio.
+Toolkit for experimental RoCm LLM inference on Vega APUs/GPUs (tested only AMD Ryzen 5700G APU) + tools for dual-GPU LLM management (Vega + nVidia dGPU) - llama.cpp (Llama Server) and LM Studio.
 
 ## Hardware
 
@@ -8,17 +8,11 @@ Personal toolkit for running local LLMs on a dual-GPU system using llama.cpp (Ll
 |-----------|--------|
 | CPU/APU | AMD Ryzen 7 5700G (8C/16T, Zen 3) |
 | iGPU | Radeon Vega 8 — gfx90c (GCN 5, 8 CUs, UMA) |
-| **dGPU** | **NVIDIA GeForce RTX 5090 (32 GB VRAM)** |
+| dGPU** | **NVIDIA GeForce RTX 5090 (32 GB VRAM) |
 | RAM | 64 GB DDR4 (shared with Vega 8 iGPU via UMA) |
 | OS | Ubuntu 25.10 "Questing", kernel 6.17 |
 
 ## Performance
-
-### RTX 5090 — Llama 2 7B Chat Q4_K_S (`-ngl 99 -c 512`)
-
-| Backend | Device | Prompt (t/s) | Generation (t/s) |
-|---------|--------|-------------|-------------------|
-| **Vulkan** | **RTX 5090** | **2,117** | **273** |
 
 ### Vega 8 iGPU — Qwen3.5-35B-A3B Q4_K_M (`-ngl 99 -c 2048`)
 
@@ -129,14 +123,6 @@ See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md#docker-rocm-workaround-wor
 
 > 64 GB GTT requires GRUB params: `amdgpu.gttsize=65536 ttm.pages_limit=16777216` — see [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
-### RTX 5090 — 32 GB VRAM
-
-| Model Size | Quantization | VRAM Usage | Notes |
-|------------|-------------|------------|-------|
-| 7-8B | Q4_K_M | ~4-5 GB | Full offload |
-| 13B | Q4_K_M | ~7-8 GB | Full offload |
-| 34B | Q4_K_M | ~18-20 GB | Full offload |
-| 70B | Q4_K_M | ~35 GB | Mostly (may need `-ngl ~60`) |
 
 ## Documentation
 
@@ -151,7 +137,7 @@ See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md#docker-rocm-workaround-wor
 ## Project Structure
 
 ```
-LLM-Toolkit/
+VEGA-ROCm-VULKAN-LLM-Toolkit/
 ├── README.md
 ├── start-llm.sh                   ← Main launcher (Vulkan/RTX 5090 default)
 ├── run-llamaserver-vulkan.sh      ← Vulkan llama-server wrapper
