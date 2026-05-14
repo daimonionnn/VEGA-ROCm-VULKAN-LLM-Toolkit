@@ -22,7 +22,7 @@ With two AMD GPUs (`/dev/dri/renderD128` = Radeon 9700 AI Pro, `/dev/dri/renderD
 
 ### Docker scripts (automatic)
 
-`run-docker-rocm.sh` and `run-docker-rocm7.sh` auto-detect the Vega 8 by PCI ID:
+`run/run-docker-rocm.sh` and `run/run-docker-rocm7.sh` auto-detect the Vega 8 by PCI ID:
 
 ```bash
 # Auto-detect confirmed: looks for PCI ID 0x1638 (Vega 8)
@@ -84,7 +84,7 @@ llama.cpp abort:98: ROCm error
 
 **Cause:** The ROCm binary doesn't contain kernels for your GPU architecture. LM Studio's ROCm backend has kernels for gfx1030+ only. Your Vega 8 is gfx90c.
 
-**Fix:** Use Vulkan (`./run/launch-lmstudio-vulkan.sh`) or build llama.cpp with gfx900 (`./build/build-llamacpp-rocm-vega.sh`).
+**Fix:** Use the main launcher (`./run/start-llama-server.sh`), Vulkan (`./run/launch-lmstudio-vulkan.sh`), or build llama.cpp with gfx900 (`./build/build-llamacpp-rocm7-baremetal.sh`).
 
 ### "hipcc not found"
 
@@ -204,7 +204,7 @@ A 9B Q4_K_M model needs ~5.5 GB for weights alone, plus KV cache (which grows wi
 **Fix:**
 1. **Reduce GPU layers** — start with `-ngl 35` and increase gradually:
    ```bash
-   ./start-qwen.sh              # safe defaults: -ngl 35 -c 2048
+  ./run/run-rocm7-baremetal.sh /path/to/model.gguf -ngl 35 -c 2048
    ```
 2. **Limit context size** — use `-c 2048` instead of `-c 4096`
 3. **Use a smaller model** — 3B models (~2 GB) are much safer on Vega 8
@@ -214,9 +214,9 @@ A 9B Q4_K_M model needs ~5.5 GB for weights alone, plus KV cache (which grows wi
    watch -n1 'free -h; echo "---"; HSA_OVERRIDE_GFX_VERSION=9.0.0 rocm-smi --showmeminfo vram 2>/dev/null'
    ```
 
-If you want to try full offload at your own risk:
+If you want to try full offload explicitly:
 ```bash
-./start-qwen.sh --aggressive    # -ngl 99 -c 4096 (may hard-lock!)
+./run/start-llama-server.sh     # uses -ngl 99 with ROCm 7.2 baremetal by default
 ```
 
 ### Inference segfault / hard crash with ROCm despite kernel tests passing
@@ -254,13 +254,13 @@ The HIP 5.7.1 runtime is ~2 major versions behind the compiler/device libs. This
 **Action Plan / Fixes:**
 1. ~~**Increase `amdgpu.gttsize` in GRUB:**~~ (Failed - still segfaults).
 2. ~~**Kernel params (AgentZ article):**~~ Applied and verified — GRUB params fix memory faults but the HIP 5.7.1 / Clang-21 mismatch still causes slot-initialization segfaults on the host.
-3. ✅ **Docker with ROCm 6.2.4:** Fully working — see [Docker ROCm Workaround](#docker-rocm-workaround-working-solution) below.
-4. **Install Official AMD Drivers:** Alternative to Docker — purge Ubuntu ROCm packages and install the official matched AMD ROCm stack.
-5. **Fallback to Vulkan:** Use the Vulkan backend which has native support for gfx90c/Vega 8 via Mesa RADV (`./run-llamaserver-vulkan.sh`).
+3. ✅ **ROCm 7.2 baremetal:** Default path — use `./run/start-llama-server.sh` or `./run/run-rocm7-baremetal.sh`.
+4. ✅ **Docker with ROCm 7.2 or 6.2.4:** Fully working — use `./run/run-docker-rocm7.sh` or `./run/run-docker-rocm.sh`.
+5. **Fallback to Vulkan:** Use the Vulkan backend which has native support for gfx90c/Vega 8 via Mesa RADV (`./run/start-llama-server.sh --vulkan`).
 
-See the [Architecture Notes](ARCHITECTURE.md#rocm-runtime-crash-analysis) for the full technical analysis.
+See the [Architecture Notes](ARCHITECTURE.md#legacy-host-hip-571-crash-analysis) for the full technical analysis.
 
-### Docker ROCm Workaround (Working Solution)
+### Docker ROCm 6.2.4 Workaround (Working Legacy Solution)
 
 The host Ubuntu ROCm stack (HIP 5.7.1 + Clang-21) has an unresolvable version mismatch that causes segfaults at slot initialization. Running llama.cpp in a Docker container with a coherent **ROCm 6.2.4** base image fixes this completely.
 
@@ -270,9 +270,9 @@ The host Ubuntu ROCm stack (HIP 5.7.1 + Clang-21) has an unresolvable version mi
 # Server available at http://127.0.0.1:8080
 ```
 
-**How it works:** `run-docker-rocm.sh` auto-builds the image from `Dockerfile.rocm64` on first run, then starts the container with GPU device passthrough (`/dev/kfd`, `/dev/dri`).
+**How it works:** `run/run-docker-rocm.sh` auto-builds the image from `build/Dockerfile.rocm64` on first run, then starts the container with GPU device passthrough (`/dev/kfd`, `/dev/dri`).
 
-**Key findings and fixes applied in `Dockerfile.rocm64`:**
+**Key findings and fixes applied in `build/Dockerfile.rocm64`:**
 
 | Problem | Fix |
 |---------|-----|

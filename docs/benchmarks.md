@@ -142,7 +142,7 @@ python3 bench/test-server-perf.py
 | --------- | -------------------------------------------------------- |
 | GPU       | AMD Radeon Graphics (Vega 8 iGPU, gfx90c)                |
 | VRAM      | 65536 MiB (64 GB GTT — system RAM mapped via UMA)        |
-| Backend   | Vulkan (Mesa RADV, native — `run-llamaserver-vulkan.sh`) |
+| Backend   | Vulkan (Mesa RADV, native — `run/run-llamaserver-vulkan.sh`) |
 
 ### Model
 
@@ -156,7 +156,7 @@ python3 bench/test-server-perf.py
 ### Server Configuration
 
 ```bash
-./run-llamaserver-vulkan.sh .../Qwen3.5-35B-A3B-Q4_K_M.gguf -ngl 99 -c 4096
+./run/run-llamaserver-vulkan.sh .../Qwen3.5-35B-A3B-Q4_K_M.gguf -ngl 99 -c 4096
 ```
 
 ### Results
@@ -312,7 +312,7 @@ LM Studio local server — Vulkan backend, default settings, model loaded via UI
 ./run/run-docker-rocm7.sh .../Qwen3.5-35B-A3B-Q4_K_M.gguf -ngl 99 -c 8192 --no-warmup -fa 0
 ```
 
-Note: `-fa 0` overrides the `-fa 1` baked into `run-docker-rocm7.sh` (last flag wins).
+Note: `-fa 0` overrides the `-fa 1` baked into `run/run-docker-rocm7.sh` (last flag wins).
 
 ### Results — Flash Attention ON (`-fa 1`)
 
@@ -403,23 +403,23 @@ Sustained inference confirmed: 800+ tokens generated (`POST /v1/chat/completions
 - **Tensile backport fix (2026-05-14):** The critical piece is `TensileLibrary_lazy_gfx900.dat` — ROCm 7's rocBLAS looks this up first at runtime; without it you get `Illegal seek for GPU arch: gfx900` on the first GEMM. The multi-stage Docker build installs rocBLAS into a `rocm/dev-ubuntu-22.04:6.3.4` stage, then copies all `*gfx900*` files + the lazy `.dat` index into the ROCm 7 layer.
 - `gfx900:xnack-` with Wave Size 64 = correct Vega 8 kernel execution (Wave64 ISA)
 - Multi-GPU isolation working: only 65536 MiB (Vega 8) visible, not the Radeon 9700's VRAM
-- Full comparative benchmark vs ROCm 6.2.4 and Vulkan TBD — run `./bench/test-server-perf.py` against `run/run-docker-rocm7.sh`
+- Superseded by the full multi-backend tables below, including ROCm 7.2 baremetal, ROCm 7.2 Docker, ROCm 6.2.4 Docker, Vulkan, and CPU.
 
 ---
 
 ## Benchmark: Qwen3.5-35B-A3B — ROCm 7.2 (Baremetal, Flash Attention ON vs OFF)
 
-**Date:** 2026-05-15
+**Date:** 2026-05-14 (re-run with `HSA_ENABLE_SDMA=1` + `HSA_XNACK=1` explicitly set)
 **Tool:** `bench/run-all-benchmarks.sh` (ROCm 7.2 Baremetal backends only)
 
 ### Hardware
 
-| Component | Details                                                                                   |
-| --------- | ----------------------------------------------------------------------------------------- |
-| GPU       | AMD Radeon Vega 8 iGPU (`/dev/dri/renderD129`, gfx900:xnack-)                             |
-| VRAM      | 65536 MiB (64 GB GTT — system RAM mapped via UMA)                                         |
-| Backend   | ROCm 7.2 Baremetal (`/opt/rocm-7.2.0`, `llm/rocm7-vega/bin/llama-server`)                |
-| Key envs  | `ROCR_VISIBLE_DEVICES=1`, `HSA_OVERRIDE_GFX_VERSION=9.0.0`, `GGML_HIP_UMA=1`             |
+| Component | Details                                                                                                    |
+| --------- | ---------------------------------------------------------------------------------------------------------- |
+| GPU       | AMD Radeon Vega 8 iGPU (`/dev/dri/renderD129`, gfx900:xnack-)                                              |
+| VRAM      | 65536 MiB (64 GB GTT — system RAM mapped via UMA)                                                          |
+| Backend   | ROCm 7.2 Baremetal (`/opt/rocm-7.2.0`, `llm/rocm7-vega/bin/llama-server`)                                 |
+| Key envs  | `ROCR_VISIBLE_DEVICES=1`, `HSA_OVERRIDE_GFX_VERSION=9.0.0`, `GGML_HIP_UMA=1`, `HSA_ENABLE_SDMA=1`, `HSA_XNACK=1` |
 
 ### Model
 
@@ -435,22 +435,23 @@ Sustained inference confirmed: 800+ tokens generated (`POST /v1/chat/completions
 
 | Context Size (actual tokens) | Requested | Prefill (Prompt) t/s | Generation (Decode) t/s |
 | ---------------------------- | --------- | -------------------- | ----------------------- |
-| 140 tokens                   | 128       | 39.24                | 14.96                   |
-| 937 tokens                   | 1024      | 68.69                | 14.32                   |
-| 3330 tokens                  | 4096      | 67.10                | 11.44                   |
+| 140 tokens                   | 128       | 40.55                | 14.50                   |
+| 937 tokens                   | 1024      | 68.18                | 14.30                   |
+| 3330 tokens                  | 4096      | 67.32                | 11.88                   |
 
 ### Results — ROCm 7.2 Baremetal FA-ON (`-fa 1`) ⚠
 
 | Context Size (actual tokens) | Requested | Prefill (Prompt) t/s | Generation (Decode) t/s |
 | ---------------------------- | --------- | -------------------- | ----------------------- |
-| 140 tokens                   | 128       | 37.80                | 14.88                   |
-| 937 tokens                   | 1024      | 52.33                | 13.96                   |
-| 3330 tokens                  | 4096      | 35.17                | 11.91                   |
+| 140 tokens                   | 128       | 38.67                | 14.88                   |
+| 937 tokens                   | 1024      | 52.16                | 13.93                   |
+| 3330 tokens                  | 4096      | 35.07                | 11.90                   |
 
 ### Observations
 
 - **Baremetal vs Docker performance is near-identical** — prefill within ~1–3% across all context sizes; decode within ~1 t/s. The gfx900 tensile backport applied in Docker (`*gfx900*` files from ROCm 6.3.4) is also present in the baremetal `/opt/rocm-7.2.0` install.
-- **FA-OFF wins at ≥1K tokens** — same pattern as Docker: 68.69 vs 52.33 t/s at 1K, 67.10 vs 35.17 t/s at 4K. FA-ON degrades severely on Vega 8 gfx900 large-context prefill.
+- **FA-OFF wins at ≥1K tokens** — same pattern as Docker: 68.18 vs 52.16 t/s at 1K, 67.32 vs 35.07 t/s at 4K. FA-ON degrades severely on Vega 8 gfx900 large-context prefill.
+- **`HSA_ENABLE_SDMA=1` + `HSA_XNACK=1` have no significant impact on performance** — results are within run-to-run noise (<1%) vs prior baremetal runs without these flags, with at most a very slight improvement across some measurements. The Vega 8 APU uses SDMA for DMA transfers and reports XNACK support; enabling both explicitly is safe and can be kept in the launch environment, but should not be expected to produce meaningful throughput gains.
 - **Recommendation:** Use `run/run-rocm7-baremetal.sh` with `-fa 0` (default) for best performance.
 
 ---
@@ -473,8 +474,8 @@ Settings: `-c 8192 --no-warmup` · `-ngl 99` (GPU) · `-ngl 0` (CPU)
 | **Vulkan** (`-ngl 99`)  | OFF       | 44.6     | 50.6      | 50.0      | Flat across context sizes                               |
 | **ROCm 7.2** (Docker)    | **OFF** ✅ | 38.6     | **70.4**  | **68.9**  | Best GPU prefill at large context                       |
 | ROCm 7.2 (Docker)        | ON ⚠      | 39.4     | 53.2      | 35.9      | FA ON severely hurts at ≥1K tokens                      |
-| **ROCm 7.2** (Baremetal) | **OFF** ✅ | 39.2     | 68.7      | 67.1      | Near-identical to Docker; no container overhead         |
-| ROCm 7.2 (Baremetal)     | ON ⚠      | 37.8     | 52.3      | 35.2      | Same FA penalty as Docker on gfx900                     |
+| **ROCm 7.2** (Baremetal) | **OFF** ✅ | 40.6     | 68.2      | 67.3      | Near-identical to Docker; HSA_ENABLE_SDMA+XNACK no-op   |
+| ROCm 7.2 (Baremetal)     | ON ⚠      | 38.7     | 52.2      | 35.1      | Same FA penalty as Docker on gfx900                     |
 | **ROCm 6.2.4** (Docker)  | **OFF** ✅ | **40.2** | 64.4      | 64.0      | Recommended config for ROCm 6                           |
 | ROCm 6.2.4 (Docker)     | ON ⚠      | 37.6     | 48.5      | 35.0      | FA ON severely hurts at ≥1K tokens                      |
 | LM Studio (Vulkan) `*`  | —         | ~48.8    | ~137.9    | ~157.6    | Batched scheduling — not single-request                 |
@@ -489,8 +490,8 @@ Settings: `-c 8192 --no-warmup` · `-ngl 99` (GPU) · `-ngl 0` (CPU)
 | CPU (`-ngl 0`)          | OFF       | 13.9     | 12.0      | 14.3      |                                             |
 | **ROCm 7.2** (Docker)    | **OFF** ✅ | 15.5     | 15.1      | 12.4      |                                             |
 | ROCm 7.2 (Docker)        | ON        | 15.4     | 14.5      | 12.4      |                                             |
-| **ROCm 7.2** (Baremetal) | **OFF** ✅ | 15.0     | 14.3      | 11.4      | Slightly lower than Docker — negligible     |
-| ROCm 7.2 (Baremetal)     | ON        | 14.9     | 14.0      | 11.9      |                                             |
+| **ROCm 7.2** (Baremetal) | **OFF** ✅ | 14.5     | 14.3      | 11.9      | Slightly lower than Docker — negligible     |
+| ROCm 7.2 (Baremetal)     | ON        | 14.9     | 13.9      | 11.9      |                                             |
 | **ROCm 6.2.4** (Docker)  | **OFF** ✅ | 14.4     | 13.8      | 11.6      |                                             |
 | ROCm 6.2.4 (Docker)      | ON        | 13.1     | 12.4      | 10.6      |                                             |
 
@@ -547,21 +548,21 @@ auto-selection of the RX 9700 (`Vulkan1`).
 
 ---
 
-### Results — ROCm 7.2 Baremetal FA-OFF (`-fa 0`) ✅ recommended
+### Results — ROCm 7.2 Baremetal FA-OFF (`-fa 0`) ✅ recommended  *(2026-05-14, HSA_ENABLE_SDMA=1 + HSA_XNACK=1)*
 
 | Context Size (actual tokens) | Requested | Prefill (Prompt) t/s | Generation (Decode) t/s |
 | ---------------------------- | --------- | -------------------- | ----------------------- |
-| 141 tokens                   | 128       | 68.12                | 13.40                   |
-| 937 tokens                   | 1024      | 80.92                | 12.10                   |
-| 3330 tokens                  | 4096      | 80.66                | 10.00                   |
+| 141 tokens                   | 128       | 67.96                | 13.32                   |
+| 937 tokens                   | 1024      | 81.96                | 12.19                   |
+| 3330 tokens                  | 4096      | 81.77                | 10.00                   |
 
-### Results — ROCm 7.2 Baremetal FA-ON (`-fa 1`) ⚠
+### Results — ROCm 7.2 Baremetal FA-ON (`-fa 1`) ⚠  *(2026-05-14, HSA_ENABLE_SDMA=1 + HSA_XNACK=1)*
 
 | Context Size (actual tokens) | Requested | Prefill (Prompt) t/s | Generation (Decode) t/s |
 | ---------------------------- | --------- | -------------------- | ----------------------- |
-| 141 tokens                   | 128       | 60.71                | 13.36                   |
-| 937 tokens                   | 1024      | 44.13                | 12.44                   |
-| 3330 tokens                  | 4096      | 25.66                | 10.67                   |
+| 141 tokens                   | 128       | 61.46                | 13.29                   |
+| 937 tokens                   | 1024      | 43.86                | 12.50                   |
+| 3330 tokens                  | 4096      | 25.60                | 10.74                   |
 
 ### Results — ROCm 7.2 Docker FA-OFF (`-fa 0`) ✅ recommended
 
@@ -648,7 +649,7 @@ Settings: `-c 8192 --no-warmup` · `-ngl 99` (GPU) · `-ngl 0` (CPU) · Vulkan p
 | Vulkan (`-ngl 99`)       | OFF       | 81       | 131       | 138       |                                                               |
 | **ROCm 7.2** (Docker)    | **OFF** ✅ | 68       | 81        | 81        | Flat above 1K tokens; better decode than ROCm 6               |
 | ROCm 7.2 (Docker)        | ON ⚠      | 61       | 43        | 26        | FA ON severely hurts at ≥1K tokens                            |
-| **ROCm 7.2** (Baremetal) | **OFF** ✅ | 68       | 81        | 81        | Near-identical to Docker; same FA penalty pattern              |
+| **ROCm 7.2** (Baremetal) | **OFF** ✅ | 68       | 82        | 82        | Near-identical to Docker; HSA_ENABLE_SDMA+XNACK no-op          |
 | ROCm 7.2 (Baremetal)     | ON ⚠      | 61       | 44        | 26        | FA ON severely hurts at ≥1K tokens                            |
 | **ROCm 6.2.4** (Docker)  | **OFF** ✅ | 67       | 80        | 80        | ~1 t/s behind ROCm 7 on prefill                               |
 | ROCm 6.2.4 (Docker)      | ON ⚠      | 59       | 41        | 23        | FA ON severely hurts at ≥1K tokens                            |
@@ -661,8 +662,8 @@ Settings: `-c 8192 --no-warmup` · `-ngl 99` (GPU) · `-ngl 0` (CPU) · Vulkan p
 | Vulkan (`-ngl 99`)       | OFF       | 14.4     | 13.5      | 11.9      |                                             |
 | **ROCm 7.2** (Docker)    | **OFF** ✅ | 13.1     | 11.9      | 9.8       | Best ROCm decode option                     |
 | ROCm 7.2 (Docker)        | ON        | 13.2     | 12.2      | 10.4      |                                             |
-| **ROCm 7.2** (Baremetal) | **OFF** ✅ | 13.4     | 12.1      | 10.0      | Slightly better than Docker on decode       |
-| ROCm 7.2 (Baremetal)     | ON        | 13.4     | 12.4      | 10.7      |                                             |
+| **ROCm 7.2** (Baremetal) | **OFF** ✅ | 13.3     | 12.2      | 10.0      | Within noise of Docker on decode            |
+| ROCm 7.2 (Baremetal)     | ON        | 13.3     | 12.5      | 10.7      |                                             |
 | **CPU** (`-ngl 0`)       | ON        | 12.3     | 11.9      | 10.1      | UMA bandwidth bound — nearly matches GPU    |
 | CPU (`-ngl 0`)           | OFF       | 12.4     | 12.0      | 11.2      |                                             |
 | **ROCm 6.2.4** (Docker)  | **OFF** ✅ | 10.6     | 9.7       | 8.3       |                                             |

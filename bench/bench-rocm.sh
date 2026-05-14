@@ -20,7 +20,7 @@ fi
 
 # Apply the same safe ROCm logic we've discovered for this APU setup
 export HSA_OVERRIDE_GFX_VERSION=9.0.0
-export HSA_ENABLE_SDMA=0
+export HSA_ENABLE_SDMA=1
 export HCC_SERIALIZE_KERNEL=3
 export HCC_SERIALIZE_COPY=3
 export GGML_HIP_UMA=1

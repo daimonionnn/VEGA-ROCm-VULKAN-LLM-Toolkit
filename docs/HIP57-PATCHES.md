@@ -168,7 +168,7 @@ readelf -h libggml-hip.so | grep 'ABI Version'
 | hipBLAS | 2.2.0 (approx) | ≥ 6.1 API | Const correctness differs from 6.x |
 | CMake | 3.31 | ≥ 3.21 | OK |
 
-> **Warning:** Despite all 6 patches, the Ubuntu 25.10 ROCm stack has a **fundamental runtime bug** — individual GPU kernel tests pass, but sustained inference crashes due to the severe mismatch between the compiler (clang 21 / ROCm 7.x era) and the HIP runtime (5.7 / ROCm 5.x era). See [ARCHITECTURE.md — ROCm Runtime Crash Analysis](ARCHITECTURE.md#rocm-runtime-crash-analysis) for details. **Use Vulkan instead.**
+> **Warning:** Despite all 6 patches, the Ubuntu 25.10 ROCm stack has a **fundamental runtime bug** — individual GPU kernel tests pass, but sustained inference crashes due to the severe mismatch between the compiler (clang 21 / ROCm 7.x era) and the HIP runtime (5.7 / ROCm 5.x era). See [ARCHITECTURE.md — Legacy Host HIP 5.7.1 Crash Analysis](ARCHITECTURE.md#legacy-host-hip-571-crash-analysis) for details. Use ROCm 7.2 baremetal or Vulkan instead.
 
 ## When Patches May Break
 

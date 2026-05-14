@@ -7,12 +7,12 @@ Building llama.cpp from source with ROCm/HIP support for the AMD Vega 8 APU (gfx
 LM Studio's bundled ROCm backend only includes kernels for RDNA2+ GPUs (gfx1030 and newer). The Vega 8 iGPU uses the GCN 5 architecture (gfx90c), which isn't supported. Building llama.cpp ourselves lets us target `gfx900` — the closest official ROCm target to gfx90c.
 
 > **Status (May 2026):**
-> - **Host HIP 5.7.1 is broken** — Ubuntu 25.10 ships HIP 5.7.1/Clang-21, a ~2 major version mismatch; GPU inference segfaults. Do not use `run-llamaserver-rocm.sh` for GPU offload.
+> - **Host HIP 5.7.1 is broken** — Ubuntu 25.10 ships HIP 5.7.1/Clang-21, a ~2 major version mismatch; GPU inference segfaults. Do not use `run/run-llamaserver-rocm.sh` for GPU offload.
 > - **ROCm 6.2.4 Docker** (`./run/run-docker-rocm.sh`) — stable, full GPU offload confirmed.
 > - **ROCm 7.2 Docker** (`./run/run-docker-rocm7.sh`) — confirmed working 2026-05-14, 35B full offload stable, gfx900 tensile backport applied.
-> - **ROCm 7.2 Baremetal** — **confirmed working** 2026-05-14. Install via `setup/install-rocm7-host.sh`, build via `build-llamacpp-rocm7-baremetal.sh`, run via `run/run-rocm7-baremetal.sh`. Two Ubuntu 25.10 workarounds needed (see [Baremetal Prerequisites](#baremetal-prerequisites-ubuntu-2510) below).
+> - **ROCm 7.2 Baremetal** — **default path**, confirmed working 2026-05-14. Install via `setup/install-rocm7-host.sh`, build via `build/build-llamacpp-rocm7-baremetal.sh`, run via `run/start-llama-server.sh` or `run/run-rocm7-baremetal.sh`. Two Ubuntu 25.10 workarounds needed (see [Baremetal Prerequisites](#baremetal-prerequisites-ubuntu-2510) below).
 >
-> For native GPU inference without ROCm, **use Vulkan** — see [ARCHITECTURE.md](ARCHITECTURE.md#rocm-runtime-crash-analysis).
+> For native GPU inference without ROCm, **use Vulkan** — see [ARCHITECTURE.md](ARCHITECTURE.md#vulkan-vs-rocm-on-this-system).
 >
 > **Multi-GPU note:** With AMD Radeon 9700 AI Pro also present, both Docker scripts auto-detect the Vega 8 render node by PCI ID (`0x1638`, `/dev/dri/renderD129`) and pass only that device into the container. In baremetal mode, `ROCR_VISIBLE_DEVICES=1` selects Vega 8 (GPU 0 = gfx1201 RX 9700, GPU 1 = gfx90c Vega 8).
 
@@ -120,17 +120,17 @@ Just re-run:
 ./build/build-llamacpp-rocm-vega.sh
 ```
 
-## ROCm 7.2 Build (Experimental)
+## ROCm 7.2 Build (Default ROCm Path)
 
 ROCm 7.x dropped official gfx900 support, but llama.cpp can still be built and run by backporting `gfx900` tensile GEMM kernels from ROCm 6.3.4. Confirmed working on Vega 8 as of 2026-05-14 (Qwen3.5-35B-A3B-Q4_K_M, 41/41 layers, sustained inference stable).
 
 **Key fix:** `TensileLibrary_lazy_gfx900.dat` must be present — ROCm 7 looks up this lazy index file first at runtime. Without it, inference crashes with `rocBLAS error: Cannot read TensileLibrary.dat: Illegal seek for GPU arch: gfx900`. The Dockerfile multi-stage build installs rocBLAS into a `rocm/dev-ubuntu-22.04:6.3.4` stage and copies the file across.
 
-### Docker (recommended)
+### Docker (containerized alternative)
 
 ```bash
 # Build image (one-time, ~20-40 min — downloads ROCm 6.3.4 rocblas inside)
-docker build -t llama-rocm7-vega -f Dockerfile.rocm7-vega .
+docker build -t llama-rocm7-vega -f build/Dockerfile.rocm7-vega build/
 
 # Run (auto-detects Vega 8 renderD129, ignores Radeon 9700)
 ./run/run-docker-rocm7.sh /path/to/model.gguf -ngl 99 -c 2048
@@ -193,7 +193,16 @@ export LD_LIBRARY_PATH="$PWD/llm/rocm7-vega/lib:/opt/rocm/lib"
 
 ## Running
 
-### Standalone llama-server via Docker (Recommended for ROCm GPU)
+### Standalone llama-server (Default ROCm 7.2 Baremetal)
+
+```bash
+./run/start-llama-server.sh
+# Server: http://127.0.0.1:8080/v1
+```
+
+The default launcher delegates to `run/run-rocm7-baremetal.sh`, selects the Vega 8 HSA agent, and uses `-fa 0` by default for best ROCm prefill on gfx900.
+
+### Standalone llama-server via Docker (ROCm 6.2.4 legacy)
 
 The host ROCm stack (HIP 5.7.1) crashes on GPU inference. Use the Docker launcher instead:
 
@@ -203,17 +212,17 @@ The host ROCm stack (HIP 5.7.1) crashes on GPU inference. Use the Docker launche
 # Server: http://127.0.0.1:8080/v1
 ```
 
-See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#docker-rocm-workaround-working-solution) for full details.
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#docker-rocm-624-workaround-working-legacy-solution) for full details.
 
-### Standalone llama-server (Native, CPU-only)
+### Standalone llama-server (Legacy host ROCm, CPU-only)
 
 ```bash
-./run-llamaserver-rocm.sh ~/models/your-model.gguf -ngl 99
+./run/run-llamaserver-rocm.sh ~/models/your-model.gguf -ngl 0
 ```
 
 This wrapper sets all the required environment variables and launches the server. The API is available at `http://127.0.0.1:8080/v1`.
 
-> **Note:** `-ngl 99` will crash on the host (HIP 5.7.1 bug). For CPU-only mode, use `-ngl 0` or set `HIP_VISIBLE_DEVICES=-1`.
+> **Note:** `-ngl 99` will crash on the Ubuntu-packaged HIP 5.7.1 host stack. For native ROCm GPU offload, use ROCm 7.2 baremetal instead.
 
 ### Manual Run
 
@@ -263,7 +272,7 @@ export GGML_HIP_UMA=0
 
 You can run llama-server alongside LM Studio and connect to it as a remote endpoint:
 
-1. Start the server: `./run-llamaserver-rocm.sh model.gguf -ngl 99`
+1. Start the server: `./run/start-llama-server.sh`
 2. In LM Studio: **Developer → Connect to external endpoint**
 3. Enter: `http://127.0.0.1:8080/v1`
 

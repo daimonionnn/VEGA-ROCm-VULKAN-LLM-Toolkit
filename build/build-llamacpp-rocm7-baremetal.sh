@@ -2,8 +2,8 @@
 #
 # Build llama.cpp with ROCm 7.x for AMD Vega 8 iGPU — BAREMETAL (no Docker)
 #
-# EXPERIMENTAL — ROCm 7.x officially dropped gfx900-family support.
-# This script reinstates it by backporting gfx900 tensile libraries from
+# ROCm 7.x officially dropped gfx900-family support. This script reinstates it
+# for Vega 8 by backporting gfx900 tensile libraries from
 # ROCm 6.3.4, then builds llama.cpp against a locally installed ROCm 7.x.
 #
 # Technique credit:
@@ -18,7 +18,7 @@
 #   - User in 'video' and 'render' groups (for /dev/kfd + /dev/dri access)
 #
 # Usage:
-#   ./build-llamacpp-rocm7-baremetal.sh [--skip-backport]
+#   ./build/build-llamacpp-rocm7-baremetal.sh [--skip-backport]
 #
 #   --skip-backport  Skip the tensile library backport step
 #                    (use if you already ran it once and /opt/rocm still has the files)
@@ -26,12 +26,12 @@
 # After build (Vega 8 iGPU — with Radeon 9700 AI Pro also present on this system):
 #   Check Vega 8 agent index first:  rocminfo | grep -B2 -A5 'gfx90'
 #   Then run:
-#   export ROCR_VISIBLE_DEVICES=0   # index of Vega 8 in rocminfo agent list
+#   export ROCR_VISIBLE_DEVICES=1   # index of Vega 8 in rocminfo agent list on this system
 #   export HIP_VISIBLE_DEVICES=0
 #   export HSA_OVERRIDE_GFX_VERSION=9.0.0
 #   export HSA_ENABLE_SDMA=0
 #   export HSA_XNACK=0
-#   export GGML_HIP_UMA=0
+#   export GGML_HIP_UMA=1
 #   ./llm/rocm7-vega/bin/llama-server -m /path/to/model.gguf -ngl 99
 #
 
@@ -57,7 +57,7 @@ for arg in "$@"; do
 done
 
 echo "═══════════════════════════════════════════════════════════"
-echo "  Build llama.cpp  ·  ROCm 7.x  ·  Vega 8  (EXPERIMENTAL)"
+echo "  Build llama.cpp  ·  ROCm 7.x  ·  Vega 8"
 echo "═══════════════════════════════════════════════════════════"
 echo "  Target GPU arch : $AMDGPU_TARGET"
 echo "  Build dir       : $BUILD_DIR"
@@ -65,7 +65,7 @@ echo "  Install dir     : $INSTALL_DIR"
 echo "  Skip backport   : $SKIP_BACKPORT"
 echo "  Parallel jobs   : $JOBS"
 echo ""
-echo "  *** EXPERIMENTAL — gfx900 is not officially supported in ROCm 7 ***"
+echo "  *** NOTE — gfx900 is not officially supported in ROCm 7; applying backport ***"
 echo ""
 
 # ─── Check prerequisites ──────────────────────────────────────────────────────
@@ -278,7 +278,7 @@ cmake --install build-rocm7 --prefix "$INSTALL_DIR"
 # ─── Done ─────────────────────────────────────────────────────────────────────
 echo ""
 echo "═══════════════════════════════════════════════════════════"
-echo "  Build complete!  (ROCm 7 / Vega 8 — experimental)"
+echo "  Build complete!  (ROCm 7 / Vega 8)"
 echo "═══════════════════════════════════════════════════════════"
 echo ""
 echo "  Binaries: $INSTALL_DIR/bin/"
@@ -291,7 +291,7 @@ echo "    export HIP_VISIBLE_DEVICES=0"
 echo "    export HSA_OVERRIDE_GFX_VERSION=9.0.0"
 echo "    export HSA_ENABLE_SDMA=0"
 echo "    export HSA_XNACK=0"
-echo "    export GGML_HIP_UMA=0"
+echo "    export GGML_HIP_UMA=1"
 echo "    export GPU_MAX_ALLOC_PERCENT=100"
 echo ""
 echo "    $INSTALL_DIR/bin/llama-server \\"
